@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import math
 import requests
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional
 from pydantic import BaseModel
 
 app = FastAPI(title="Number Classification API")
@@ -10,18 +10,18 @@ app = FastAPI(title="Number Classification API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 class NumberResponse(BaseModel):
-    number: int
+    number: Union[int, str]
     is_prime: bool
     is_perfect: bool
     properties: List[str]
-    digit_sum: int
+    digit_sum: Optional[int]
     fun_fact: str
 
 class ErrorResponse(BaseModel):
@@ -30,7 +30,7 @@ class ErrorResponse(BaseModel):
 
 def is_prime(n: int) -> bool:
     """Check if a number is prime."""
-    if n < 0:  # Handle negative numbers
+    if n < 0:
         return False
     if n < 2:
         return False
@@ -41,7 +41,7 @@ def is_prime(n: int) -> bool:
 
 def is_perfect(n: int) -> bool:
     """Check if a number is perfect."""
-    if n < 0:  # Handle negative numbers
+    if n < 0:
         return False
     if n <= 1:
         return False
@@ -50,7 +50,7 @@ def is_perfect(n: int) -> bool:
 
 def is_armstrong(n: int) -> bool:
     """Check if a number is an Armstrong number."""
-    if n < 0:  # Handle negative numbers
+    if n < 0:
         return False
     num_str = str(n)
     power = len(num_str)
@@ -60,8 +60,8 @@ def get_properties(n: int) -> List[str]:
     """Get all properties of a number."""
     properties = []
     
-    # Check if Armstrong
-    if is_armstrong(n):
+    # Check if Armstrong (only for positive numbers)
+    if n >= 0 and is_armstrong(n):
         properties.append("armstrong")
     
     # Check if odd/even
@@ -69,12 +69,17 @@ def get_properties(n: int) -> List[str]:
     
     return properties
 
-def get_digit_sum(n: int) -> int:
+def get_digit_sum(n: int) -> Optional[int]:
     """Calculate the sum of digits."""
-    return sum(int(digit) for digit in str(n))
+    if n < 0:
+        return None
+    return sum(int(digit) for digit in str(abs(n)))
 
 def get_fun_fact(n: int) -> str:
     """Get a fun fact about the number from the Numbers API."""
+    if n < 0:
+        return f"{n} is an uninteresting number."
+        
     try:
         response = requests.get(f"http://numbersapi.com/{n}/math")
         if response.status_code == 200:
@@ -85,24 +90,30 @@ def get_fun_fact(n: int) -> str:
         return f"{n} is a number with interesting mathematical properties."
 
 @app.get("/api/classify-number", response_model=Union[NumberResponse, ErrorResponse])
-async def classify_number(number: str):
+async def classify_number(number: Optional[str] = Query(None)):
     """Classify a number and return its properties."""
+    # Check if number parameter is missing
+    if number is None:
+        return ErrorResponse(number="undefined")
+        
+    # Try to convert to integer
     try:
         num = int(number)
+        
+        return NumberResponse(
+            number=num,
+            is_prime=is_prime(num),
+            is_perfect=is_perfect(num),
+            properties=get_properties(num),
+            digit_sum=get_digit_sum(num),
+            fun_fact=get_fun_fact(num)
+        )
     except ValueError:
-        return ErrorResponse(number=number)
-    
-    # Get all properties
-    properties = get_properties(num)
-    
-    return NumberResponse(
-        number=num,
-        is_prime=is_prime(num),
-        is_perfect=is_perfect(num),
-        properties=properties,
-        digit_sum=get_digit_sum(num),
-        fun_fact=get_fun_fact(num)
-    )
+        # For non-numeric inputs (alphabets or symbols)
+        if number.isalpha():
+            return ErrorResponse(number="alphabet")
+        else:
+            return ErrorResponse(number=number)
 
 if __name__ == "__main__":
     import uvicorn
