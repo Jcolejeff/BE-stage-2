@@ -48,7 +48,7 @@ GET /api/classify-number?number={number}
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/number-classifier-api.git
+git clone https://github.com/Jcolejeff/BE-stage-2
 cd number-classifier-api
 ```
 
@@ -86,7 +86,7 @@ pytest tests/
 
 ## Deployment
 
-The API is deployed at: `<your-domain.com>`
+The API is deployed at: ``
 
 ## Performance
 
